@@ -5,7 +5,7 @@ It reads newline-delimited data from stdin, computes space-efficient sketches, a
 
 ## Why Do I Want This?
 
-You have a large dataset for which you want to answer the following questions:
+You have a very large dataset for which you want to answer the following questions:
 
 1) How many distinct items exist?
 2) What are the Top K occuring items?
@@ -16,7 +16,7 @@ You have a large dataset for which you want to answer the following questions:
 Each of these questions has an approximate answer that can be computed
 in linear time and sub-linear space. As a bonus, sketches are mergeable, meaning
 you can compute Sketch `S` on stream `A`, Sketch `T` on stream `B`, and compute
-answers from `S + T`!
+answers from `S + T` as if you processed `A + B`!
 
 ## Install
 
@@ -30,14 +30,14 @@ The binary is at `./target/release/sketch-toolkit`.
 
 The following data sketches are implemented and supported.
 
-| Sketch | Subcommand | Algorithm | What it does | Mergeable |
-|--------|------------|-----------|--------------|----------|
-| Count Distinct | `count-distinct` | KMV | Estimate number of unique items | Yes      |
-| Top-K | `top-k` | Count-Min | Find the top most frequent items | No       |
-| Frequency | `frequency` | Count-Min | Estimate the frequency of each item | Yes      |
-| Quantiles | `quantiles` | DDSketch | Estimate value at a given percentile | Yes      | 
-| Membership | `membership` | Bloom | Probabilistic set membership test | Yes      |
-| Sample | `sample` | Reservoir | Draw a uniform random sample from a stream | No       |
+| Command | Algorithm | What it does | Mergeable |
+|------------|-----------|--------------|----------|
+| `count-distinct` | KMV | Estimate number of unique items | Yes      |
+| `top-k` | Count-Min | Find the top most frequent items | No       |
+| `frequency` | Count-Min | Estimate the frequency of each item | Yes      |
+| `quantiles` | DDSketch | Estimate value at a given percentile | Yes      | 
+| `membership` | Bloom | Probabilistic set membership test | Yes      |
+| `sample` | Reservoir | Draw a uniform random sample from a stream | No       |
 
 ## Options
 
@@ -45,7 +45,7 @@ The following data sketches are implemented and supported.
 
 | Flag | Default | Description |
 |---|---|---|
-| `-k` | 1024 | Number of hashes to track. Higher = more accurate, more memory. |
+| `-k` | 16384 | Number of hashes to track. Higher = more accurate, more memory. |
 | `-o` | — | Save sketch to file instead of printing results. |
 
 ### `top-k`
@@ -57,11 +57,19 @@ The following data sketches are implemented and supported.
 | `--depth` | 7 | Count-Min table depth. Higher = more accurate. |
 | `-o` | — | Save sketch to file instead of printing results. |
 
+### `frequency`
+
+| Flag | Default | Description |
+|---|---|---|
+| `--width` | 2000 | Count-Min table width. Higher = more accurate. |
+| `--depth` | 7 | Count-Min table depth. Higher = more accurate. |
+| `-o` | — | Save sketch to file instead of printing results. |
+
 ### `quantiles`
 
 | Flag | Default | Description |
 |---|---|---|
-| `-p` | 50,90,95,99 | Percentiles to compute (comma-separated). |
+| `-p` | 0,50,90,95,99,100 | Percentiles to compute (comma-separated). |
 | `--error` | 0.01 | Relative error bound. Lower = more accurate, more buckets. |
 | `-o` | — | Save sketch to file instead of printing results. |
 
@@ -100,3 +108,13 @@ Each line of the input stream is considered one item; the sampled lines are writ
 |---|---|---|
 | `-k` | 100 | Number of items to sample. |
 | `-o` | — | Save sampled lines to file instead of printing to stdout. |
+
+## References
+
+This project implements well-known research in the data-sketches literature. Here are some papers which directly inspire this project:
+
+- Bar-Yossef, Ziv, et al. "Counting distinct elements in a data stream." International Workshop on Randomization and Approximation Techniques in Computer Science. Berlin, Heidelberg: Springer Berlin Heidelberg, 2002.
+- B. H. Bloom, “Space/time trade-offs in hash coding with allowable errors,” Communications of the ACM, vol. 13, no. 7, pp. 422-426, 1970
+- Cormode, Graham, and Shan Muthukrishnan. "An improved data stream summary: the count-min sketch and its applications." Journal of Algorithms 55.1 (2005): 58-75.
+- Masson, Charles, Jee E. Rim, and Homin K. Lee. "Ddsketch: A fast and fully-mergeable quantile sketch with relative-error guarantees." arXiv preprint arXiv:1908.10693 (2019).
+- Vitter, Jeffrey S. "Random sampling with a reservoir." ACM Transactions on Mathematical Software (TOMS) 11.1 (1985): 37-57.
