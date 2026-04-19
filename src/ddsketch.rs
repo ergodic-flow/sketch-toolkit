@@ -1,3 +1,7 @@
+//! DDSketch — a distributed quantile sketch data structure that provides
+//! approximate quantile queries with guaranteed relative error bounds. It is
+//! fully mergeable, making it suitable for distributed aggregation.
+
 use std::collections::BTreeMap;
 use wincode::{SchemaRead, SchemaWrite};
 

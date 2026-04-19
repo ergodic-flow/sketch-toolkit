@@ -1,3 +1,7 @@
+//! K-Minimum Values (KMV) sketch — a cardinality estimation data structure
+//! that approximates the number of distinct elements in a stream by tracking
+//! the k smallest hash values observed.
+
 use std::collections::BTreeSet;
 use wincode::{SchemaRead, SchemaWrite};
 

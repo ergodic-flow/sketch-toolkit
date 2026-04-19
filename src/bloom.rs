@@ -1,3 +1,7 @@
+//! Bloom filter — a space-efficient probabilistic data structure used to test
+//! whether an element is a member of a set. False positives are possible, but
+//! false negatives are not.
+
 use wincode::{SchemaRead, SchemaWrite};
 
 use crate::hash::{hashfn, row_seed};

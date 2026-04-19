@@ -1,3 +1,7 @@
+//! Reservoir sampling — a streaming algorithm that maintains a uniformly
+//! random sample of fixed size k from an observed stream of items, without
+//! knowing the total stream length in advance.
+
 use rand::Rng;
 
 #[derive(Debug, Clone)]

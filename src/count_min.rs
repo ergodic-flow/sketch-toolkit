@@ -1,3 +1,7 @@
+//! Count-Min Sketch — a sub-linear space probabilistic data structure that
+//! provides approximate frequency counts for items in a data stream. Counts
+//! may be over-estimated due to hash collisions, but never under-estimated.
+
 use std::collections::HashMap;
 use wincode::{SchemaRead, SchemaWrite};
 
