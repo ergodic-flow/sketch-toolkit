@@ -26,6 +26,14 @@ cargo build --release
 
 The binary is at `./target/release/sketch-toolkit`.
 
+## Usage
+
+This project is used in one of two ways: you stream data in via STDIN and a summary prints out
+
+OR
+
+You stream data via STDIN and save a summary to disk. Later, you can query or merge that summary with another!
+
 ## Sketches
 
 The following data sketches are implemented and supported.
