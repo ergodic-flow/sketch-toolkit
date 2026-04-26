@@ -27,12 +27,18 @@ impl CountMinSketch {
     ///
     /// Larger `width` reduces the probability of collisions (error magnitude).
     /// Larger `depth` reduces the probability of a "bad" estimate (error frequency).
-    pub fn new(width: usize, depth: usize) -> Self {
-        Self {
+    pub fn new(width: usize, depth: usize) -> anyhow::Result<Self> {
+        anyhow::ensure!(width > 0, "Count-Min width must be >= 1");
+        anyhow::ensure!(depth > 0, "Count-Min depth must be >= 1");
+        let size = width
+            .checked_mul(depth)
+            .ok_or_else(|| anyhow::anyhow!("Count-Min dimensions are too large"))?;
+
+        Ok(Self {
             width,
             depth,
-            counters: vec![0; width * depth],
-        }
+            counters: vec![0; size],
+        })
     }
 
     /// Maps a value to a specific column for a given row.
@@ -54,7 +60,7 @@ impl CountMinSketch {
         for row in 0..self.depth {
             let col = self.column(row, value);
             let idx = row * self.width + col;
-            
+
             self.counters[idx] += 1;
             min_count = min_count.min(self.counters[idx]);
         }
@@ -69,7 +75,7 @@ impl CountMinSketch {
         for row in 0..self.depth {
             let col = self.column(row, value);
             let idx = row * self.width + col;
-            
+
             min = min.min(self.counters[idx]);
         }
         min
@@ -88,12 +94,12 @@ impl CountMinSketch {
             self.depth,
             other.depth
         );
-        
+
         // Contiguous memory allows us to optimize the merge using a flat zipped iterator
         for (a, b) in self.counters.iter_mut().zip(other.counters.iter()) {
             *a += b;
         }
-        
+
         Ok(())
     }
 
@@ -129,7 +135,7 @@ impl TopKSketch {
     pub fn new(k: usize, width: usize, depth: usize) -> anyhow::Result<Self> {
         anyhow::ensure!(k > 0, "TopK requires k >= 1");
         Ok(Self {
-            cm: CountMinSketch::new(width, depth),
+            cm: CountMinSketch::new(width, depth)?,
             k,
             top_items: HashMap::with_capacity(k),
         })
@@ -142,15 +148,11 @@ impl TopKSketch {
     pub fn insert(&mut self, value: &str) {
         let count = self.cm.insert(value);
 
-        // 1. If we are already tracking this item, update its count.
-        if self.top_items.contains_key(value) {
+        // 1. If we are already tracking this item or have room, store the current estimate.
+        if self.top_items.contains_key(value) || self.top_items.len() < self.k {
             self.top_items.insert(value.to_string(), count);
         }
-        // 2. If we haven't reached capacity K, add it.
-        else if self.top_items.len() < self.k {
-            self.top_items.insert(value.to_string(), count);
-        }
-        // 3. Otherwise, check if it deserves to replace the current minimum item.
+        // 2. Otherwise, check if it deserves to replace the current minimum item.
         else {
             let mut min_key = None;
             let mut min_val = u64::MAX;
@@ -196,33 +198,25 @@ impl TopKSketch {
         self.cm.depth()
     }
 
-    /// Merges another `TopKSketch` into this one.
-    ///
-    /// The underlying sketches are merged, and the top-K list is recalculated
-    /// by combining candidates from both sketches and re-estimating their
-    /// frequencies against the combined sketch.
-    pub fn merge(&mut self, other: &Self) -> anyhow::Result<()> {
-        anyhow::ensure!(
-            self.k == other.k,
-            "cannot merge top-k sketches with different k ({} vs {})",
-            self.k,
-            other.k
-        );
-        self.cm.merge(&other.cm)?;
+    pub fn merge(&mut self, _other: &Self) -> anyhow::Result<()> {
+        anyhow::bail!("top-k sketches are not mergeable")
+    }
+}
 
-        // Union the candidate pools from both sketches and re-evaluate
-        // their counts using the newly merged Count-Min sketch.
-        let mut candidates = HashMap::new();
-        for key in self.top_items.keys().chain(other.top_items.keys()) {
-            candidates.insert(key.clone(), self.cm.estimate(key));
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        let mut estimated: Vec<_> = candidates.into_iter().collect();
-        // Sort descending so the most frequent items are at the front.
-        estimated.sort_by(|a, b| b.1.cmp(&a.1));
-        estimated.truncate(self.k);
+    #[test]
+    fn test_count_min_invalid_params() {
+        assert!(CountMinSketch::new(0, 7).is_err());
+        assert!(CountMinSketch::new(100, 0).is_err());
+    }
 
-        self.top_items = estimated.into_iter().collect();
-        Ok(())
+    #[test]
+    fn test_top_k_merge_disabled() {
+        let mut a = TopKSketch::new(1, 100, 3).unwrap();
+        let b = TopKSketch::new(1, 100, 3).unwrap();
+        assert!(a.merge(&b).is_err());
     }
 }

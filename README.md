@@ -101,7 +101,7 @@ Membership sketches can be merged with the `merge` command (bitwise OR of the ar
 
 ### `merge`
 
-Takes 2+ sketch files. All sketches must be the same type with matching parameters.
+Takes 2+ mergeable sketch files. All sketches must be the same type with matching parameters. `top-k` and `sample` outputs are not mergeable.
 
 | Flag | Default | Description |
 |---|---|---|

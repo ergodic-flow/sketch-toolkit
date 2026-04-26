@@ -18,7 +18,7 @@ pub struct DDSketch {
 impl DDSketch {
     pub fn new(relative_error: f64) -> anyhow::Result<Self> {
         anyhow::ensure!(
-            relative_error > 0.0 && relative_error < 1.0,
+            relative_error.is_finite() && relative_error > 0.0 && relative_error < 1.0,
             "relative error must be between 0 and 1"
         );
         let gamma = (1.0 + relative_error) / (1.0 - relative_error);
@@ -120,7 +120,6 @@ impl DDSketch {
     pub fn relative_error(&self) -> f64 {
         (self.gamma - 1.0) / (self.gamma + 1.0)
     }
-
 }
 
 #[cfg(test)]

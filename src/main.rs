@@ -78,17 +78,18 @@ enum Commands {
     },
 }
 
-fn with_stdin_lines(mut f: impl FnMut(&str)) {
+fn with_stdin_lines(mut f: impl FnMut(&str) -> anyhow::Result<()>) -> anyhow::Result<()> {
     let stdin = io::stdin();
     let mut reader = BufReader::with_capacity(256 * 1024, stdin.lock());
     let mut buf = String::new();
-    while reader.read_line(&mut buf).unwrap_or(0) > 0 {
+    while reader.read_line(&mut buf).context("error reading stdin")? > 0 {
         let line = buf.trim_end_matches('\n').trim_end_matches('\r');
         if !line.is_empty() {
-            f(line);
+            f(line)?;
         }
         buf.clear();
     }
+    Ok(())
 }
 
 fn print_json(pretty: bool, value: &serde_json::Value) {
@@ -102,15 +103,14 @@ fn print_json(pretty: bool, value: &serde_json::Value) {
     out.write_all(b"\n").unwrap();
 }
 
-fn parse_percentiles(raw: &[f64]) -> Vec<f64> {
+fn parse_percentiles(raw: &[f64]) -> anyhow::Result<Vec<f64>> {
     raw.iter()
         .map(|&p| {
+            anyhow::ensure!(p.is_finite(), "percentile must be finite: {p}");
+            anyhow::ensure!(p >= 0.0, "percentile {p} out of range [0, 100]");
+            anyhow::ensure!(p <= 100.0, "percentile {p} out of range [0, 100]");
             let q = if p > 1.0 { p / 100.0 } else { p };
-            assert!(
-                (0.0..=100.0).contains(&q),
-                "percentile {p} out of range [0, 100]"
-            );
-            q
+            Ok(q)
         })
         .collect()
 }
@@ -129,7 +129,10 @@ fn run() -> anyhow::Result<()> {
     match cli.command {
         Commands::CountDistinct { k, output } => {
             let mut sketch = sk::kmv::KmvSketch::new(k)?;
-            with_stdin_lines(|line| sketch.insert(line));
+            with_stdin_lines(|line| {
+                sketch.insert(line);
+                Ok(())
+            })?;
             let data = SketchData::CountDistinctKmv(sketch);
             if let Some(path) = output {
                 sk::save_sketch(&data, &path)?;
@@ -144,7 +147,10 @@ fn run() -> anyhow::Result<()> {
             output,
         } => {
             let mut sketch = sk::count_min::TopKSketch::new(k, width, depth)?;
-            with_stdin_lines(|line| sketch.insert(line));
+            with_stdin_lines(|line| {
+                sketch.insert(line);
+                Ok(())
+            })?;
             let data = SketchData::TopKCountMin(sketch);
             if let Some(path) = output {
                 sk::save_sketch(&data, &path)?;
@@ -160,14 +166,16 @@ fn run() -> anyhow::Result<()> {
             let mut sketch = sk::ddsketch::DDSketch::new(error)?;
             with_stdin_lines(|line| {
                 if let Ok(v) = line.parse::<f64>() {
+                    anyhow::ensure!(v.is_finite(), "quantile input value must be finite: {line}");
                     sketch.insert(v);
                 }
-            });
+                Ok(())
+            })?;
             let data = SketchData::QuantilesDDSketch(sketch);
             if let Some(path) = output {
                 sk::save_sketch(&data, &path)?;
             } else {
-                let ps = parse_percentiles(&percentiles);
+                let ps = parse_percentiles(&percentiles)?;
                 print_json(pretty, &sk::query_quantiles(&data, &ps)?);
             }
         }
@@ -176,8 +184,11 @@ fn run() -> anyhow::Result<()> {
             depth,
             output,
         } => {
-            let mut sketch = sk::bloom::BloomFilter::new(width, depth);
-            with_stdin_lines(|line| sketch.insert(line));
+            let mut sketch = sk::bloom::BloomFilter::new(width, depth)?;
+            with_stdin_lines(|line| {
+                sketch.insert(line);
+                Ok(())
+            })?;
             let data = SketchData::MembershipBloom(sketch);
             if let Some(path) = output {
                 sk::save_sketch(&data, &path)?;
@@ -190,10 +201,11 @@ fn run() -> anyhow::Result<()> {
             depth,
             output,
         } => {
-            let mut sketch = sk::count_min::CountMinSketch::new(width, depth);
+            let mut sketch = sk::count_min::CountMinSketch::new(width, depth)?;
             with_stdin_lines(|line| {
                 sketch.insert(line);
-            });
+                Ok(())
+            })?;
             let data = SketchData::FrequencyCountMin(sketch);
             if let Some(path) = output {
                 sk::save_sketch(&data, &path)?;
@@ -203,7 +215,10 @@ fn run() -> anyhow::Result<()> {
         }
         Commands::Sample { k, output } => {
             let mut sampler = sk::reservoir::ReservoirSample::new(k)?;
-            with_stdin_lines(|line| sampler.insert(line));
+            with_stdin_lines(|line| {
+                sampler.insert(line);
+                Ok(())
+            })?;
             let items = sampler.sample();
             if let Some(path) = output {
                 let mut out = BufWriter::new(
@@ -236,7 +251,7 @@ fn run() -> anyhow::Result<()> {
             } else if let Some(v) = value {
                 print_json(pretty, &sk::query_membership(&data, &v)?);
             } else if !percentiles.is_empty() {
-                let ps = parse_percentiles(&percentiles);
+                let ps = parse_percentiles(&percentiles)?;
                 print_json(pretty, &sk::query_quantiles(&data, &ps)?);
             } else {
                 print_json(pretty, &sk::query_result(&data));

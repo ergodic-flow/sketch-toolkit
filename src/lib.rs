@@ -1,8 +1,8 @@
+pub mod bloom;
 pub mod count_min;
 pub mod ddsketch;
 pub mod hash;
 pub mod kmv;
-pub mod bloom;
 pub mod reservoir;
 
 use anyhow::Context;
@@ -27,7 +27,9 @@ impl SketchData {
             Self::TopKCountMin(topk) => topk.insert(value),
             Self::MembershipBloom(bf) => bf.insert(value),
             Self::QuantilesDDSketch(dds) => {
-                if let Ok(v) = value.parse::<f64>() {
+                if let Ok(v) = value.parse::<f64>()
+                    && v.is_finite()
+                {
                     dds.insert(v);
                 }
             }

@@ -15,14 +15,17 @@ pub struct BloomFilter {
 }
 
 impl BloomFilter {
-    pub fn new(width: usize, depth: usize) -> Self {
-        let words = (width + 63) / 64;
-        Self {
+    pub fn new(width: usize, depth: usize) -> anyhow::Result<Self> {
+        anyhow::ensure!(width > 0, "Bloom filter width must be >= 1");
+        anyhow::ensure!(depth > 0, "Bloom filter depth must be >= 1");
+
+        let words = width.div_ceil(64);
+        Ok(Self {
             width,
             depth,
             bits: vec![0u64; words],
             count: 0,
-        }
+        })
     }
 
     fn bit_index(&self, row: usize, value: &str) -> usize {
@@ -78,14 +81,12 @@ impl BloomFilter {
         if set_bits == 0 {
             return 0;
         }
-        let ratio = set_bits as f64 / self.width as f64;
-        let ln_not_p = (1.0 - ratio.powf(1.0 / self.depth as f64)).ln();
-        if ln_not_p == 0.0 {
+        if set_bits >= self.width as u64 {
             return u64::MAX;
         }
-        let n = (self.width as f64 * (1.0 - (ratio.powf(1.0 / self.depth as f64))).ln())
-            / self.depth as f64
-            / (1.0 - 1.0 / self.width as f64).ln();
+
+        let fill_ratio = set_bits as f64 / self.width as f64;
+        let n = -(self.width as f64 / self.depth as f64) * (1.0 - fill_ratio).ln();
         n as u64
     }
 
@@ -110,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_contains_inserted() {
-        let mut bf = BloomFilter::new(10000, 7);
+        let mut bf = BloomFilter::new(10000, 7).unwrap();
         bf.insert("hello");
         bf.insert("world");
         assert!(bf.contains("hello"));
@@ -119,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_no_false_negatives() {
-        let mut bf = BloomFilter::new(10000, 7);
+        let mut bf = BloomFilter::new(10000, 7).unwrap();
         for i in 0..1000 {
             bf.insert(&format!("key-{i}"));
         }
@@ -133,7 +134,7 @@ mod tests {
 
     #[test]
     fn test_false_positive_rate() {
-        let mut bf = BloomFilter::new(100000, 7);
+        let mut bf = BloomFilter::new(100000, 7).unwrap();
         for i in 0..10000 {
             bf.insert(&format!("key-{i}"));
         }
@@ -149,8 +150,8 @@ mod tests {
 
     #[test]
     fn test_merge() {
-        let mut bf1 = BloomFilter::new(10000, 7);
-        let mut bf2 = BloomFilter::new(10000, 7);
+        let mut bf1 = BloomFilter::new(10000, 7).unwrap();
+        let mut bf2 = BloomFilter::new(10000, 7).unwrap();
         for i in 0..500 {
             bf1.insert(&format!("key-{i}"));
         }
@@ -168,8 +169,8 @@ mod tests {
 
     #[test]
     fn test_merge_preserves_original() {
-        let mut bf1 = BloomFilter::new(10000, 7);
-        let mut bf2 = BloomFilter::new(10000, 7);
+        let mut bf1 = BloomFilter::new(10000, 7).unwrap();
+        let mut bf2 = BloomFilter::new(10000, 7).unwrap();
         bf1.insert("only-in-first");
         bf2.insert("only-in-second");
         bf1.merge(&bf2).unwrap();
@@ -179,8 +180,25 @@ mod tests {
 
     #[test]
     fn test_merge_different_params() {
-        let mut bf1 = BloomFilter::new(10000, 7);
-        let bf2 = BloomFilter::new(5000, 7);
+        let mut bf1 = BloomFilter::new(10000, 7).unwrap();
+        let bf2 = BloomFilter::new(5000, 7).unwrap();
         assert!(bf1.merge(&bf2).is_err());
+    }
+
+    #[test]
+    fn test_estimated_count() {
+        let mut bf = BloomFilter::new(100000, 7).unwrap();
+        for i in 0..10000 {
+            bf.insert(&format!("key-{i}"));
+        }
+        let estimate = bf.estimated_count();
+        let err = ((estimate as f64 - 10000.0) / 10000.0).abs();
+        assert!(err < 0.05, "estimate {estimate}, error {err}");
+    }
+
+    #[test]
+    fn test_invalid_params() {
+        assert!(BloomFilter::new(0, 7).is_err());
+        assert!(BloomFilter::new(10000, 0).is_err());
     }
 }

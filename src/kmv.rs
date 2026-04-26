@@ -29,14 +29,14 @@ impl KmvSketch {
     fn insert_hash(&mut self, h: u64) {
         if self.min_hashes.len() < self.k {
             self.min_hashes.insert(h);
-        } else if let Some(&max) = self.min_hashes.last() {
-            if h < max {
-                self.min_hashes.insert(h);
-                // BTreeSet doesn't grow if `h` was a duplicate, so only pop
-                // if we actually exceeded our `k` limit.
-                if self.min_hashes.len() > self.k {
-                    let _ = self.min_hashes.pop_last();
-                }
+        } else if let Some(&max) = self.min_hashes.last()
+            && h < max
+        {
+            self.min_hashes.insert(h);
+            // BTreeSet doesn't grow if `h` was a duplicate, so only pop
+            // if we actually exceeded our `k` limit.
+            if self.min_hashes.len() > self.k {
+                let _ = self.min_hashes.pop_last();
             }
         }
     }
